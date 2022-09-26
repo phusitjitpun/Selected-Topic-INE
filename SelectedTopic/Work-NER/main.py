@@ -1,3 +1,5 @@
+from crypt import methods
+import re
 from flask import Flask, render_template, request
 from werkzeug.utils import secure_filename
 import os
@@ -11,6 +13,8 @@ import itertools
 from gensim.models.tfidfmodel import TfidfModel
 import nltk
 import spacy
+from unittest.util import _MAX_LENGTH
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 app = Flask(__name__, template_folder='template')
 
@@ -198,5 +202,33 @@ def wordtype():
         totallist.append(quantity)
         totallist.append(ordinal)
     return render_template('wordtype.html', value = totallist , rgo = len(max(totallist)))
+
+@app.route('/fakenew', methods = ['GET', 'POST'])
+def prediction():
+    def get_prediction(text, convert_to_label=False):
+        if request.method == 'POST':
+            model_path = "fake-news-Thunder"
+            model = AutoModelForSequenceClassification.from_pretrained(model_path)
+            tokenizer = AutoTokenizer.from_pretrained(model_path)
+    # prepare our text into tokenized sequence
+            inputs = tokenizer(text, padding=True, truncation=True, max_length=512, return_tensors="pt")
+    # perform inference to our model
+            outputs = model(**inputs)
+    # get output probabilities by doing softmax
+            probs = outputs[0].softmax(1)
+    # executing argmax function to get the candidate label
+            d = {
+                0: "reliable",
+                1: "fake"
+            }
+            if convert_to_label:
+                return d[int(probs.argmax())]
+            else:
+                return int(probs.argmax())
+        real_news = request.method["news"]
+        msg = str(get_prediction(real_news, convert_to_label=True))
+        return render_template('index.html', msg = msg)
+    return render_template('index.html')
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8000, debug = True)
